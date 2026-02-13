@@ -1,8 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1C1E31;
+  --foreground: #FFFFFF;
+
+  /* Workpath Brand Colors */
+  --wp-navy-dark: #1C1E31;
+  --wp-navy: #363953;
+  --wp-yellow-dark: #EFC92D;
+  --wp-yellow: #FADA51;
+  --wp-yellow-light: #F7E9C1;
+  --wp-blue-dark: #1A78CA;
+  --wp-blue: #48BCFE;
+  --wp-blue-light: #C9E3FB;
+  --wp-pink-dark: #BF0246;
+  --wp-pink: #D81159;
+  --wp-pink-light: #FBD8E2;
+  --wp-orange-dark: #CC6600;
+  --wp-orange: #F5954D;
+  --wp-orange-light: #FFEBD6;
+  --wp-red-dark: #C6331D;
+  --wp-red: #D9513C;
+  --wp-red-light: #FFCAC1;
+  --wp-green-dark: #4D7D6C;
+  --wp-green: #669C89;
+  --wp-green-light: #D9ECE5;
+  --wp-lilac-dark: #684DF5;
+  --wp-lilac: #9683FA;
+  --wp-lilac-light: #E5E0FF;
+  --wp-grey-dark: #838895;
+  --wp-grey: #C2C5CE;
+  --wp-grey-light-100: #E8EBF2;
+  --wp-grey-light-50: #F3F4F7;
 }
 
 @theme inline {
@@ -12,15 +41,80 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Radial voice visualization */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+}
+
+@keyframes rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rotate-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes breath {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s ease-in-out infinite;
+}
+
+.animate-rotate-slow {
+  animation: rotate-slow 20s linear infinite;
+}
+
+.animate-rotate-reverse {
+  animation: rotate-reverse 25s linear infinite;
+}
+
+.animate-breath {
+  animation: breath 4s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
