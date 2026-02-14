@@ -4,13 +4,16 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import WorkspaceDisplay from "@/components/WorkspaceDisplay";
 import VoiceCoach from "@/components/VoiceCoach";
 import DebugPanel from "@/components/DebugPanel";
-import type { ChatMessage, WorkspaceUpdate, WorkspaceSection, OKR, CompletedSession } from "@/lib/types";
+import type { ChatMessage, TodoItem, KPI, OKR, Initiative, CompletedSession } from "@/lib/types";
 import { loadState, saveState, createDefaultState } from "@/lib/storage";
 
 export default function Home() {
   // Current session state
-  const [sections, setSections] = useState<WorkspaceSection[]>([]);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [strategy, setStrategy] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<KPI[]>([]);
   const [okr, setOkr] = useState<OKR | null>(null);
+  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [understanding, setUnderstanding] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [language, setLanguage] = useState<"de" | "en">("de");
@@ -29,8 +32,11 @@ export default function Home() {
     if (saved) {
       setLanguage(saved.language);
       setMessages(saved.currentSession.messages);
-      setSections(saved.currentSession.sections);
+      setTodos(saved.currentSession.todos);
+      setStrategy(saved.currentSession.strategy);
+      setKpis(saved.currentSession.kpis);
       setOkr(saved.currentSession.okr);
+      setInitiatives(saved.currentSession.initiatives);
       setUnderstanding(saved.currentSession.understanding);
       setCompletedSessions(saved.completedSessions);
       setUserContext(saved.userContext);
@@ -38,82 +44,87 @@ export default function Home() {
     setIsHydrated(true);
   }, []);
 
-  // Persist to localStorage on state changes (debounced)
+  // Persist to localStorage (debounced)
   useEffect(() => {
     if (!isHydrated) return;
-
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveState({
-        version: 1,
+        version: 2,
         language,
         currentSession: {
           messages,
-          sections,
+          todos,
+          strategy,
+          kpis,
           okr,
+          initiatives,
           understanding,
         },
         completedSessions,
         userContext,
       });
     }, 300);
-  }, [isHydrated, language, messages, sections, okr, understanding, completedSessions, userContext]);
+  }, [isHydrated, language, messages, todos, strategy, kpis, okr, initiatives, understanding, completedSessions, userContext]);
 
-  const handleWorkspaceUpdate = useCallback((update: WorkspaceUpdate) => {
-    setSections(update.sections);
-    setOkr(update.okr);
-    setUnderstanding(update.understanding);
-    if (update.understanding) {
-      setUserContext(update.understanding);
-    }
+  // Tool callbacks
+  const handleTodosUpdate = useCallback((newTodos: TodoItem[], newUnderstanding: string) => {
+    setTodos(newTodos);
+    setUnderstanding(newUnderstanding);
+    if (newUnderstanding) setUserContext(newUnderstanding);
   }, []);
 
-  const handleMessagesChange = useCallback((newMessages: ChatMessage[]) => {
-    setMessages(newMessages);
-  }, []);
+  const handleStrategyUpdate = useCallback((s: string) => setStrategy(s), []);
+  const handleKpisUpdate = useCallback((k: KPI[]) => setKpis(k), []);
+  const handleOkrUpdate = useCallback((o: OKR) => setOkr(o), []);
+  const handleInitiativesUpdate = useCallback((i: Initiative[]) => setInitiatives(i), []);
+  const handleMessagesChange = useCallback((m: ChatMessage[]) => setMessages(m), []);
 
   const handleNewOkr = useCallback(() => {
-    // Save current session to history if there's an OKR
     if (okr) {
       const session: CompletedSession = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         okr,
-        sections,
+        strategy,
+        kpis,
+        initiatives,
         understanding,
         messages,
       };
       setCompletedSessions((prev) => [...prev, session]);
     }
-    // Clear current session but preserve userContext
-    setSections([]);
+    setTodos([]);
+    setStrategy(null);
+    setKpis([]);
     setOkr(null);
+    setInitiatives([]);
     setUnderstanding("");
     setMessages([]);
-  }, [okr, sections, understanding, messages]);
+  }, [okr, strategy, kpis, initiatives, understanding, messages]);
 
   const handleReset = useCallback(() => {
     const fresh = createDefaultState(language);
-    setSections(fresh.currentSession.sections);
+    setTodos(fresh.currentSession.todos);
+    setStrategy(fresh.currentSession.strategy);
+    setKpis(fresh.currentSession.kpis);
     setOkr(fresh.currentSession.okr);
+    setInitiatives(fresh.currentSession.initiatives);
     setUnderstanding(fresh.currentSession.understanding);
     setMessages(fresh.currentSession.messages);
     setCompletedSessions(fresh.completedSessions);
     setUserContext(fresh.userContext);
   }, [language]);
 
-  const showNewOkrButton = okr !== null || sections.length > 0;
+  const showNewOkrButton = okr !== null || todos.length > 0 || strategy !== null;
 
-  // Don't render until hydrated to prevent flash
   if (!isHydrated) {
-    return (
-      <div className="min-h-screen bg-[#1C1E31]" />
-    );
+    return <div className="min-h-screen bg-[#1C1E31]" />;
   }
 
   return (
     <div className="min-h-screen bg-[#1C1E31] relative overflow-hidden">
-      {/* Subtle gradient background */}
+      {/* Gradient background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[#48BCFE]/[0.03] rounded-full blur-[120px]" />
         <div className="absolute bottom-0 left-1/4 w-[600px] h-[400px] bg-[#FADA51]/[0.02] rounded-full blur-[100px]" />
@@ -124,20 +135,8 @@ export default function Home() {
         <header className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#FADA51]/15 flex items-center justify-center">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="text-[#FADA51]"
-              >
-                <path
-                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#FADA51]">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <span className="text-sm font-semibold text-white tracking-tight">
@@ -165,13 +164,19 @@ export default function Home() {
 
         {/* Two-column layout */}
         <div className="flex flex-col lg:flex-row gap-8 items-start">
-          {/* Left column: Voice Companion (1/3) */}
           <section className="w-full lg:w-1/3 lg:sticky lg:top-8">
             <VoiceCoach
-              onWorkspaceUpdate={handleWorkspaceUpdate}
+              onTodosUpdate={handleTodosUpdate}
+              onStrategyUpdate={handleStrategyUpdate}
+              onKpisUpdate={handleKpisUpdate}
+              onOkrUpdate={handleOkrUpdate}
+              onInitiativesUpdate={handleInitiativesUpdate}
               onMessagesChange={handleMessagesChange}
-              existingSections={sections}
+              existingTodos={todos}
+              existingStrategy={strategy}
+              existingKpis={kpis}
               existingOkr={okr}
+              existingInitiatives={initiatives}
               existingUnderstanding={understanding}
               userContext={userContext}
               completedSessions={completedSessions}
@@ -180,18 +185,24 @@ export default function Home() {
             />
           </section>
 
-          {/* Right column: Workspace Display (2/3) */}
           <section className="w-full lg:w-2/3">
-            <WorkspaceDisplay sections={sections} okr={okr} />
+            <WorkspaceDisplay
+              strategy={strategy}
+              kpis={kpis}
+              okr={okr}
+              initiatives={initiatives}
+            />
           </section>
         </div>
       </main>
 
-      {/* Debug Panel */}
       <DebugPanel
         messages={messages}
-        sections={sections}
+        todos={todos}
+        strategy={strategy}
+        kpis={kpis}
         okr={okr}
+        initiatives={initiatives}
         understanding={understanding}
         userContext={userContext}
         completedSessions={completedSessions}

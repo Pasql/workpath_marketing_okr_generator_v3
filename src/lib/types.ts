@@ -9,33 +9,31 @@ export interface OKR {
   key_results: KeyResult[];
 }
 
-export interface OKRUpdate {
-  objective: string;
-  key_results: KeyResult[];
-  understanding: string;
-}
-
 export interface ChatMessage {
   role: "user" | "coach";
   text: string;
   timestamp: number;
 }
 
-// --- Workspace (agent-driven, flexible sections) ---
+// --- Coaching to-do items ---
 
-export type SectionStatus = "pending" | "active" | "completed";
-
-export interface WorkspaceSection {
+export interface TodoItem {
   id: string;
-  title: string;
-  status: SectionStatus;
-  summary: string;
+  text: string;
+  completed: boolean;
 }
 
-export interface WorkspaceUpdate {
-  sections: WorkspaceSection[];
-  okr: OKR | null;
-  understanding: string;
+// --- Right-side structured sections ---
+
+export interface KPI {
+  label: string;
+  value: string;
+  description: string;
+}
+
+export interface Initiative {
+  text: string;
+  linked_kr: string;
 }
 
 // --- Multi-session history ---
@@ -44,7 +42,9 @@ export interface CompletedSession {
   id: string;
   timestamp: number;
   okr: OKR;
-  sections: WorkspaceSection[];
+  strategy: string | null;
+  kpis: KPI[];
+  initiatives: Initiative[];
   understanding: string;
   messages: ChatMessage[];
 }
@@ -52,12 +52,15 @@ export interface CompletedSession {
 // --- Persisted state ---
 
 export interface PersistedState {
-  version: 1;
+  version: 2;
   language: "de" | "en";
   currentSession: {
     messages: ChatMessage[];
-    sections: WorkspaceSection[];
+    todos: TodoItem[];
+    strategy: string | null;
+    kpis: KPI[];
     okr: OKR | null;
+    initiatives: Initiative[];
     understanding: string;
   };
   completedSessions: CompletedSession[];

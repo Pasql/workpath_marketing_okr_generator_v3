@@ -7,7 +7,7 @@ export function loadState(): PersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.version !== 1) return null;
+    if (parsed?.version !== 2) return null;
     return parsed as PersistedState;
   } catch {
     return null;
@@ -28,12 +28,15 @@ export function clearState(): void {
 
 export function createDefaultState(language: "de" | "en" = "de"): PersistedState {
   return {
-    version: 1,
+    version: 2,
     language,
     currentSession: {
       messages: [],
-      sections: [],
+      todos: [],
+      strategy: null,
+      kpis: [],
       okr: null,
+      initiatives: [],
       understanding: "",
     },
     completedSessions: [],

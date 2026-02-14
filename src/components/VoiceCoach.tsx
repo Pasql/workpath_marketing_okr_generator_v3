@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useConversation } from "@elevenlabs/react";
-import type { ChatMessage, WorkspaceUpdate, WorkspaceSection, OKR, CompletedSession } from "@/lib/types";
-import { SYSTEM_PROMPT, FIRST_MESSAGES } from "@/lib/system-prompt";
+import type { ChatMessage, TodoItem, KPI, OKR, Initiative, CompletedSession } from "@/lib/types";
+import { SYSTEM_PROMPT, FIRST_MESSAGE_EN } from "@/lib/system-prompt";
+import TodoList from "./TodoList";
 
 const NUM_BARS = 72;
 const TWO_PI = Math.PI * 2;
@@ -14,10 +15,17 @@ const BLUE = { r: 72, g: 188, b: 254 };         // #48BCFE - user speaking
 const IDLE = { r: 131, g: 136, b: 149 };         // #838895 - grey-dark idle
 
 interface VoiceCoachProps {
-  onWorkspaceUpdate: (update: WorkspaceUpdate) => void;
+  onTodosUpdate: (todos: TodoItem[], understanding: string) => void;
+  onStrategyUpdate: (strategy: string) => void;
+  onKpisUpdate: (kpis: KPI[]) => void;
+  onOkrUpdate: (okr: OKR) => void;
+  onInitiativesUpdate: (initiatives: Initiative[]) => void;
   onMessagesChange?: (messages: ChatMessage[]) => void;
-  existingSections: WorkspaceSection[];
+  existingTodos: TodoItem[];
+  existingStrategy: string | null;
+  existingKpis: KPI[];
   existingOkr: OKR | null;
+  existingInitiatives: Initiative[];
   existingUnderstanding: string;
   userContext: string;
   completedSessions: CompletedSession[];
@@ -26,10 +34,17 @@ interface VoiceCoachProps {
 }
 
 export default function VoiceCoach({
-  onWorkspaceUpdate,
+  onTodosUpdate,
+  onStrategyUpdate,
+  onKpisUpdate,
+  onOkrUpdate,
+  onInitiativesUpdate,
   onMessagesChange,
-  existingSections,
+  existingTodos,
+  existingStrategy,
+  existingKpis,
   existingOkr,
+  existingInitiatives,
   existingUnderstanding,
   userContext,
   completedSessions,
@@ -40,12 +55,18 @@ export default function VoiceCoach({
   const animationRef = useRef<number>(0);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [todos, setTodos] = useState<TodoItem[]>(existingTodos);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Visualization data refs
   const barsRef = useRef<number[]>(new Array(NUM_BARS).fill(0));
   const targetBarsRef = useRef<number[]>(new Array(NUM_BARS).fill(0));
+
+  // Sync todos from parent when they change externally
+  useEffect(() => {
+    setTodos(existingTodos);
+  }, [existingTodos]);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -54,7 +75,7 @@ export default function VoiceCoach({
     }
   }, [messages]);
 
-  // Sync messages to parent via effect (avoids setState-during-render)
+  // Sync messages to parent
   useEffect(() => {
     onMessagesChange?.(messages);
   }, [messages, onMessagesChange]);
@@ -68,6 +89,14 @@ export default function VoiceCoach({
     },
     []
   );
+
+  // Helper to safely parse params (may arrive as string or object)
+  const safeParse = (params: unknown): Record<string, unknown> => {
+    if (typeof params === "string") {
+      try { return JSON.parse(params); } catch { return {}; }
+    }
+    return (params as Record<string, unknown>) || {};
+  };
 
   const conversation = useConversation({
     onConnect: () => {
@@ -87,30 +116,47 @@ export default function VoiceCoach({
         addMessage(role, message.message);
       }
     },
-    onUnhandledClientToolCall: (params: { tool_name: string; tool_call_id: string; parameters: unknown }) => {
-      console.warn("[VoiceCoach] Unhandled client tool call:", params.tool_name, params);
-    },
-    onAgentToolRequest: (params: unknown) => {
-      console.log("[VoiceCoach] Agent tool request:", params);
+    onUnhandledClientToolCall: (params: { tool_name: string; tool_call_id: string }) => {
+      console.warn("[VoiceCoach] Unhandled client tool:", params.tool_name);
     },
     clientTools: {
-      update_workspace: (parameters: Record<string, unknown>) => {
-        console.log("[VoiceCoach] update_workspace called with:", JSON.stringify(parameters).slice(0, 500));
-
-        // Defensive: handle case where parameters might be stringified
-        let parsed = parameters;
-        if (typeof parameters === "string") {
-          try { parsed = JSON.parse(parameters); } catch { parsed = {}; }
-        }
-
-        const sections = (Array.isArray(parsed.sections) ? parsed.sections : []) as WorkspaceSection[];
-        const okr = (parsed.okr ?? null) as OKR | null;
-        const understanding = (typeof parsed.understanding === "string" ? parsed.understanding : "");
-
-        console.log("[VoiceCoach] Parsed workspace update:", { sectionsCount: sections.length, hasOkr: !!okr, understanding: understanding.slice(0, 100) });
-
-        onWorkspaceUpdate({ sections, okr, understanding });
-        return "Workspace updated on screen successfully";
+      update_todos: (rawParams: Record<string, unknown>) => {
+        const params = safeParse(rawParams);
+        console.log("[VoiceCoach] update_todos:", JSON.stringify(params).slice(0, 300));
+        const newTodos = (Array.isArray(params.todos) ? params.todos : []) as TodoItem[];
+        const understanding = (typeof params.understanding === "string" ? params.understanding : "");
+        setTodos(newTodos);
+        onTodosUpdate(newTodos, understanding);
+        return "ok";
+      },
+      update_strategy: (rawParams: Record<string, unknown>) => {
+        const params = safeParse(rawParams);
+        console.log("[VoiceCoach] update_strategy:", JSON.stringify(params).slice(0, 300));
+        const strategy = (typeof params.strategy === "string" ? params.strategy : "");
+        onStrategyUpdate(strategy);
+        return "ok";
+      },
+      update_kpis: (rawParams: Record<string, unknown>) => {
+        const params = safeParse(rawParams);
+        console.log("[VoiceCoach] update_kpis:", JSON.stringify(params).slice(0, 300));
+        const kpis = (Array.isArray(params.kpis) ? params.kpis : []) as KPI[];
+        onKpisUpdate(kpis);
+        return "ok";
+      },
+      update_okr: (rawParams: Record<string, unknown>) => {
+        const params = safeParse(rawParams);
+        console.log("[VoiceCoach] update_okr:", JSON.stringify(params).slice(0, 300));
+        const objective = (typeof params.objective === "string" ? params.objective : "");
+        const key_results = (Array.isArray(params.key_results) ? params.key_results : []) as OKR["key_results"];
+        onOkrUpdate({ objective, key_results });
+        return "ok";
+      },
+      update_initiatives: (rawParams: Record<string, unknown>) => {
+        const params = safeParse(rawParams);
+        console.log("[VoiceCoach] update_initiatives:", JSON.stringify(params).slice(0, 300));
+        const initiatives = (Array.isArray(params.initiatives) ? params.initiatives : []) as Initiative[];
+        onInitiativesUpdate(initiatives);
+        return "ok";
       },
     },
   });
@@ -123,15 +169,20 @@ export default function VoiceCoach({
       ? "\n\n## Language\nRespond in German (Deutsch). The user's interface is set to German."
       : "";
 
-    const hasMidSession = existingSections.length > 0 || existingOkr !== null;
+    const hasMidSession = existingTodos.length > 0 || existingOkr !== null || existingStrategy !== null || existingKpis.length > 0 || existingInitiatives.length > 0;
     const hasUserContext = userContext.length > 0 || completedSessions.length > 0;
 
     // Scenario C: Resume mid-session
     if (hasMidSession) {
-      const sectionsJson = JSON.stringify(existingSections);
-      const okrJson = existingOkr ? JSON.stringify(existingOkr) : "null";
+      const stateJson = JSON.stringify({
+        todos: existingTodos,
+        strategy: existingStrategy,
+        kpis: existingKpis,
+        okr: existingOkr,
+        initiatives: existingInitiatives,
+      });
 
-      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming Mid-Session)\nThe user was in the middle of a coaching session. Here is the current workspace state:\n\nSections: ${sectionsJson}\nOKR: ${okrJson}${existingUnderstanding ? `\n\nYour understanding: ${existingUnderstanding}` : ""}${userContext ? `\n\nAccumulated user context: ${userContext}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself. Call update_workspace immediately with the current state so it appears on screen, then continue the conversation.`;
+      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming Mid-Session)\nThe user was in the middle of a coaching session. Current state:\n${stateJson}${existingUnderstanding ? `\n\nYour understanding: ${existingUnderstanding}` : ""}${userContext ? `\n\nAccumulated user context: ${userContext}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself. Call update_todos immediately with the current todos, and any other tools needed to restore the screen, then continue the conversation.`;
 
       const firstMessage = language === "de"
         ? "Willkommen zurück! Lass uns da weitermachen, wo wir aufgehört haben."
@@ -153,7 +204,7 @@ export default function VoiceCoach({
         .map((s, i) => `${i + 1}. "${s.okr.objective}"`)
         .join("\n");
 
-      const returningPrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Returning User Context\nThis user has worked with you before. Here's what you know about them:\n\n${userContext}${historySnippets ? `\n\nPrevious OKRs drafted:\n${historySnippets}` : ""}\n\nSkip the initial introductions and context-gathering basics — you already know this user. Greet them warmly as a returning client and ask what they'd like to work on next. Start with a context section to understand this session's focus.`;
+      const returningPrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Returning User Context\nThis user has worked with you before. Here's what you know about them:\n\n${userContext}${historySnippets ? `\n\nPrevious OKRs drafted:\n${historySnippets}` : ""}\n\nSkip the initial introductions — you already know this user. Greet them warmly and ask what they'd like to work on next. Call update_todos immediately with a fresh coaching roadmap.`;
 
       const firstMessage = language === "de"
         ? "Schön, dich wieder zu sehen! Was möchtest du dieses Mal angehen — ein neues OKR für dasselbe Team, oder etwas ganz anderes?"
@@ -169,13 +220,15 @@ export default function VoiceCoach({
     }
 
     // Scenario A: Fresh user
-    return {
-      agent: {
-        language,
-        firstMessage: FIRST_MESSAGES[language],
-        prompt: { prompt: SYSTEM_PROMPT + langInstruction },
-      },
+    // German first message comes from ElevenLabs agent config; only override for English
+    const freshOverride: Record<string, unknown> = {
+      language,
+      prompt: { prompt: SYSTEM_PROMPT + langInstruction },
     };
+    if (language === "en") {
+      freshOverride.firstMessage = FIRST_MESSAGE_EN;
+    }
+    return { agent: freshOverride };
   };
 
   // Start or end session
@@ -194,7 +247,6 @@ export default function VoiceCoach({
         throw new Error("NEXT_PUBLIC_ELEVENLABS_AGENT_ID is not set");
       }
 
-      // Try signed URL first, fall back to public agent
       let sessionConfig: Parameters<typeof conversation.startSession>[0];
 
       try {
@@ -212,7 +264,6 @@ export default function VoiceCoach({
         };
       }
 
-      // Add language + resume overrides
       const overrides = buildOverrides();
       (sessionConfig as Record<string, unknown>).overrides = overrides;
 
@@ -273,7 +324,6 @@ export default function VoiceCoach({
       const isUserSpeaking = inputVolume > 0.05;
       const isActive = isSessionActive && (isCoachSpeaking || isUserSpeaking);
 
-      // Determine active color
       const c = isCoachSpeaking ? GREEN : isUserSpeaking ? BLUE : IDLE;
 
       // Update bar targets
@@ -281,29 +331,23 @@ export default function VoiceCoach({
         const freqData = isCoachSpeaking ? outputFreqData : inputFreqData;
         if (freqData && freqData.length > 0) {
           for (let i = 0; i < NUM_BARS; i++) {
-            const freqIndex = Math.floor(
-              (i / NUM_BARS) * Math.min(freqData.length, 64)
-            );
+            const freqIndex = Math.floor((i / NUM_BARS) * Math.min(freqData.length, 64));
             const value = freqData[freqIndex] / 255;
             targetBarsRef.current[i] = value * 0.9;
           }
         }
       } else if (isSessionActive) {
         for (let i = 0; i < NUM_BARS; i++) {
-          targetBarsRef.current[i] =
-            (Math.sin(i * 0.1 + time * 1.2) * 0.5 + 0.5) * 0.1;
+          targetBarsRef.current[i] = (Math.sin(i * 0.1 + time * 1.2) * 0.5 + 0.5) * 0.1;
         }
       } else {
         for (let i = 0; i < NUM_BARS; i++) {
-          targetBarsRef.current[i] =
-            (Math.sin(i * 0.1 + time * 0.8) * 0.5 + 0.5) * 0.05;
+          targetBarsRef.current[i] = (Math.sin(i * 0.1 + time * 0.8) * 0.5 + 0.5) * 0.05;
         }
       }
 
-      // Smooth interpolation
       for (let i = 0; i < NUM_BARS; i++) {
-        barsRef.current[i] +=
-          (targetBarsRef.current[i] - barsRef.current[i]) * 0.15;
+        barsRef.current[i] += (targetBarsRef.current[i] - barsRef.current[i]) * 0.15;
       }
 
       // Ambient glow rings
@@ -321,21 +365,16 @@ export default function VoiceCoach({
       for (let i = 0; i < NUM_BARS; i++) {
         const angle = (i / NUM_BARS) * TWO_PI - Math.PI / 2;
         const barHeight = barsRef.current[i] * 45 + 3;
-
         const innerR = baseRadius + 8;
         const outerR = innerR + barHeight;
-
         const x1 = cx + Math.cos(angle) * innerR;
         const y1 = cy + Math.sin(angle) * innerR;
         const x2 = cx + Math.cos(angle) * outerR;
         const y2 = cy + Math.sin(angle) * outerR;
-
         const intensity = barsRef.current[i];
         const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
-
         gradient.addColorStop(0, `rgba(${c.r}, ${c.g}, ${c.b}, ${0.6 + intensity * 0.4})`);
         gradient.addColorStop(1, `rgba(${c.r}, ${c.g}, ${c.b}, ${intensity * 0.15})`);
-
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
@@ -378,29 +417,13 @@ export default function VoiceCoach({
 
   return (
     <div className="w-full flex flex-col items-center">
-      {/* Voice visualization container */}
-      <div
-        className="relative w-full flex justify-center items-center"
-        style={{ height: 260 }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ zIndex: 1 }}
-        />
+      {/* Voice visualization */}
+      <div className="relative w-full flex justify-center items-center" style={{ height: 260 }}>
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} />
 
-        {/* Avatar */}
-        <button
-          onClick={handleToggle}
-          className="relative z-10 cursor-pointer group"
-          style={{ width: 120, height: 120 }}
-        >
+        <button onClick={handleToggle} className="relative z-10 cursor-pointer group" style={{ width: 120, height: 120 }}>
           <div className="w-full h-full rounded-full overflow-hidden border-2 border-white/10 group-hover:border-[#FADA51]/40 transition-colors duration-500">
-            <svg
-              viewBox="0 0 200 200"
-              className="w-full h-full"
-              xmlns="http://www.w3.org/2000/svg"
-            >
+            <svg viewBox="0 0 200 200" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <linearGradient id="bg-grad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#363953" />
@@ -436,8 +459,6 @@ export default function VoiceCoach({
               <circle cx="138" cy="110" r="2" fill="#EFC92D" opacity="0.8" />
             </svg>
           </div>
-
-          {/* Active ring */}
           {isSessionActive && (
             <div className="absolute inset-0 -m-2 rounded-full border-2 border-[#FADA51]/25 animate-pulse-ring" />
           )}
@@ -446,45 +467,22 @@ export default function VoiceCoach({
 
       {/* Status indicator */}
       <div className="mt-1 flex items-center gap-2">
-        <div
-          className={`w-2 h-2 rounded-full ${
-            isSessionActive
-              ? isSpeaking
-                ? "bg-[#669C89] animate-pulse"
-                : status === "connected"
-                  ? "bg-[#48BCFE] animate-pulse"
-                  : "bg-[#FADA51]"
-              : connectionError
-                ? "bg-[#D9513C]"
-                : hasHistory
-                  ? "bg-[#838895]"
-                  : "bg-[#838895]/60"
-          }`}
-        />
-        <span
-          className={`text-xs font-medium tracking-wide uppercase ${
-            isSessionActive
-              ? isSpeaking
-                ? "text-[#669C89]"
-                : status === "connected"
-                  ? "text-[#48BCFE]"
-                  : "text-[#FADA51]"
-              : connectionError
-                ? "text-[#D9513C]"
-                : "text-[#838895]"
-          }`}
-        >
+        <div className={`w-2 h-2 rounded-full ${
+          isSessionActive
+            ? isSpeaking ? "bg-[#669C89] animate-pulse"
+              : status === "connected" ? "bg-[#48BCFE] animate-pulse" : "bg-[#FADA51]"
+            : connectionError ? "bg-[#D9513C]"
+              : hasHistory ? "bg-[#838895]" : "bg-[#838895]/60"
+        }`} />
+        <span className={`text-xs font-medium tracking-wide uppercase ${
+          isSessionActive
+            ? isSpeaking ? "text-[#669C89]"
+              : status === "connected" ? "text-[#48BCFE]" : "text-[#FADA51]"
+            : connectionError ? "text-[#D9513C]" : "text-[#838895]"
+        }`}>
           {isSessionActive
-            ? isSpeaking
-              ? "Speaking"
-              : status === "connected"
-                ? "Listening"
-                : "Connecting..."
-            : connectionError
-              ? "Error"
-              : hasHistory
-                ? "Paused — click to continue"
-                : "Click to start"}
+            ? isSpeaking ? "Speaking" : status === "connected" ? "Listening" : "Connecting..."
+            : connectionError ? "Error" : hasHistory ? "Paused — click to continue" : "Click to start"}
         </span>
       </div>
 
@@ -493,9 +491,7 @@ export default function VoiceCoach({
         <button
           onClick={() => onLanguageChange("de")}
           className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition-all duration-200 ${
-            language === "de"
-              ? "bg-[#FADA51] text-[#1C1E31]"
-              : "text-[#838895] hover:text-[#C2C5CE]"
+            language === "de" ? "bg-[#FADA51] text-[#1C1E31]" : "text-[#838895] hover:text-[#C2C5CE]"
           }`}
         >
           DE
@@ -503,9 +499,7 @@ export default function VoiceCoach({
         <button
           onClick={() => onLanguageChange("en")}
           className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition-all duration-200 ${
-            language === "en"
-              ? "bg-[#FADA51] text-[#1C1E31]"
-              : "text-[#838895] hover:text-[#C2C5CE]"
+            language === "en" ? "bg-[#FADA51] text-[#1C1E31]" : "text-[#838895] hover:text-[#C2C5CE]"
           }`}
         >
           EN
@@ -513,11 +507,7 @@ export default function VoiceCoach({
       </div>
 
       {/* Transcript */}
-      <div
-        ref={transcriptRef}
-        className="mt-4 w-full overflow-y-auto space-y-2 px-1"
-        style={{ maxHeight: 300 }}
-      >
+      <div ref={transcriptRef} className="mt-4 w-full overflow-y-auto space-y-2 px-1" style={{ maxHeight: 300 }}>
         {messages.length === 0 && !isSessionActive && (
           <p className="text-xs text-[#838895] text-center italic py-4">
             Start a session to begin your OKR coaching conversation.
@@ -527,22 +517,21 @@ export default function VoiceCoach({
           <div
             key={i}
             className={`text-xs leading-relaxed px-3 py-2 rounded-lg ${
-              msg.role === "coach"
-                ? "bg-[#669C89]/[0.08] text-[#C2C5CE]"
-                : "bg-[#363953]/40 text-[#C2C5CE]"
+              msg.role === "coach" ? "bg-[#669C89]/[0.08] text-[#C2C5CE]" : "bg-[#363953]/40 text-[#C2C5CE]"
             }`}
           >
-            <span
-              className={`font-semibold text-[10px] uppercase tracking-wider ${
-                msg.role === "coach" ? "text-[#669C89]" : "text-[#48BCFE]"
-              }`}
-            >
+            <span className={`font-semibold text-[10px] uppercase tracking-wider ${
+              msg.role === "coach" ? "text-[#669C89]" : "text-[#48BCFE]"
+            }`}>
               {msg.role === "coach" ? "Companion" : "You"}
             </span>
             <p className="mt-0.5">{msg.text}</p>
           </div>
         ))}
       </div>
+
+      {/* Coaching progress */}
+      <TodoList todos={todos} />
     </div>
   );
 }
