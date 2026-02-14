@@ -18,6 +18,8 @@ interface VoiceCoachProps {
   onMessagesChange?: (messages: ChatMessage[]) => void;
   existingOkr: OKR | null;
   existingUnderstanding: string;
+  language: "de" | "en";
+  onLanguageChange: (lang: "de" | "en") => void;
 }
 
 export default function VoiceCoach({
@@ -25,6 +27,8 @@ export default function VoiceCoach({
   onMessagesChange,
   existingOkr,
   existingUnderstanding,
+  language,
+  onLanguageChange,
 }: VoiceCoachProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
@@ -88,27 +92,46 @@ export default function VoiceCoach({
 
   const { status, isSpeaking } = conversation;
 
-  // Build resume overrides when restarting with existing OKR
-  const buildResumeOverrides = () => {
-    if (!existingOkr) return undefined;
+  // Build session overrides (language + optional resume context)
+  const buildOverrides = () => {
+    const langInstruction = language === "de"
+      ? "\n\n## Language\nRespond in German (Deutsch). The user's interface is set to German."
+      : "";
 
-    const krList = existingOkr.key_results
-      .map((kr) => `- ${kr.label}: ${kr.text}`)
-      .join("\n");
+    if (existingOkr) {
+      // Resume session
+      const krList = existingOkr.key_results
+        .map((kr) => `- ${kr.label}: ${kr.text}`)
+        .join("\n");
 
-    const krSummary = existingOkr.key_results.length > 0
-      ? ` We had ${existingOkr.key_results.length} key results so far.`
-      : " We haven't drafted key results yet.";
+      const krSummary = existingOkr.key_results.length > 0
+        ? (language === "de"
+            ? ` Wir hatten bisher ${existingOkr.key_results.length} Key Results.`
+            : ` We had ${existingOkr.key_results.length} key results so far.`)
+        : (language === "de"
+            ? " Wir haben noch keine Key Results formuliert."
+            : " We haven't drafted key results yet.");
 
-    // Override prompt replaces the entire system prompt, so include the full prompt + resume context
-    const resumePrompt = SYSTEM_PROMPT + `\n\n## Session Context (Resuming)\nThe user was previously working on this OKR:\n\nObjective: ${existingOkr.objective}${krList ? `\nKey Results:\n${krList}` : ""}${existingUnderstanding ? `\n\nYour understanding of their goals: ${existingUnderstanding}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself or start over. Acknowledge briefly that you're picking up where you left off and ask what they'd like to refine next. Call update_okr immediately with the current OKR state so it appears on screen.`;
+      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming)\nThe user was previously working on this OKR:\n\nObjective: ${existingOkr.objective}${krList ? `\nKey Results:\n${krList}` : ""}${existingUnderstanding ? `\n\nYour understanding of their goals: ${existingUnderstanding}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself or start over. Acknowledge briefly that you're picking up where you left off and ask what they'd like to refine next. Call update_okr immediately with the current OKR state so it appears on screen.`;
 
+      const firstMessage = language === "de"
+        ? `Willkommen zurück! Wir haben an deinem OKR gearbeitet: "${existingOkr.objective.slice(0, 120)}".${krSummary} Was möchtest du als nächstes verfeinern oder bearbeiten?`
+        : `Welcome back! We were working on your OKR: "${existingOkr.objective.slice(0, 120)}".${krSummary} What would you like to refine or work on next?`;
+
+      return {
+        agent: {
+          language,
+          firstMessage,
+          prompt: { prompt: resumePrompt },
+        },
+      };
+    }
+
+    // Fresh session — override language + first message
     return {
       agent: {
-        firstMessage: `Welcome back! We were working on your OKR: "${existingOkr.objective.slice(0, 120)}".${krSummary} What would you like to refine or work on next?`,
-        prompt: {
-          prompt: resumePrompt,
-        },
+        language,
+        prompt: { prompt: SYSTEM_PROMPT + langInstruction },
       },
     };
   };
@@ -147,11 +170,9 @@ export default function VoiceCoach({
         };
       }
 
-      // Add resume overrides if we have a previous OKR
-      const overrides = buildResumeOverrides();
-      if (overrides) {
-        (sessionConfig as Record<string, unknown>).overrides = overrides;
-      }
+      // Add language + resume overrides
+      const overrides = buildOverrides();
+      (sessionConfig as Record<string, unknown>).overrides = overrides;
 
       await conversation.startSession(sessionConfig);
       setIsSessionActive(true);
@@ -423,6 +444,30 @@ export default function VoiceCoach({
                 ? "Paused — click to continue"
                 : "Click to start"}
         </span>
+      </div>
+
+      {/* Language toggle */}
+      <div className="mt-3 flex items-center rounded-full bg-[#363953]/60 border border-[#363953] p-0.5">
+        <button
+          onClick={() => onLanguageChange("de")}
+          className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition-all duration-200 ${
+            language === "de"
+              ? "bg-[#FADA51] text-[#1C1E31]"
+              : "text-[#838895] hover:text-[#C2C5CE]"
+          }`}
+        >
+          DE
+        </button>
+        <button
+          onClick={() => onLanguageChange("en")}
+          className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition-all duration-200 ${
+            language === "en"
+              ? "bg-[#FADA51] text-[#1C1E31]"
+              : "text-[#838895] hover:text-[#C2C5CE]"
+          }`}
+        >
+          EN
+        </button>
       </div>
 
       {/* Transcript */}

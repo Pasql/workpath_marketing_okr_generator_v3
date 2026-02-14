@@ -10,6 +10,7 @@ export default function Home() {
   const [okr, setOkr] = useState<OKR | null>(null);
   const [understanding, setUnderstanding] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [language, setLanguage] = useState<"de" | "en">("de");
 
   const handleOkrUpdate = useCallback((update: OKRUpdate) => {
     setOkr({
@@ -72,6 +73,8 @@ export default function Home() {
               onMessagesChange={handleMessagesChange}
               existingOkr={okr}
               existingUnderstanding={understanding}
+              language={language}
+              onLanguageChange={setLanguage}
             />
           </section>
 

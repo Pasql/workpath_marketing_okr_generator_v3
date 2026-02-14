@@ -87,9 +87,23 @@ async function main() {
     conversation_config: {
       agent: {
         first_message: FIRST_MESSAGE,
+        language: "de",
         prompt: {
           prompt: SYSTEM_PROMPT,
           tool_ids: [TOOL_ID],
+        },
+      },
+    },
+    platform_settings: {
+      overrides: {
+        conversation_config_override: {
+          agent: {
+            first_message: true,
+            language: true,
+            prompt: {
+              prompt: true,
+            },
+          },
         },
       },
     },
