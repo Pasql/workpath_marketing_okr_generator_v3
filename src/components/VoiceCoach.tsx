@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useConversation } from "@elevenlabs/react";
-import type { OKR, OKRUpdate, ChatMessage } from "@/lib/types";
-import { SYSTEM_PROMPT } from "@/lib/system-prompt";
+import type { ChatMessage, WorkspaceUpdate, WorkspaceSection, OKR, CompletedSession } from "@/lib/types";
+import { SYSTEM_PROMPT, FIRST_MESSAGES } from "@/lib/system-prompt";
 
 const NUM_BARS = 72;
 const TWO_PI = Math.PI * 2;
@@ -14,19 +14,25 @@ const BLUE = { r: 72, g: 188, b: 254 };         // #48BCFE - user speaking
 const IDLE = { r: 131, g: 136, b: 149 };         // #838895 - grey-dark idle
 
 interface VoiceCoachProps {
-  onOkrUpdate: (update: OKRUpdate) => void;
+  onWorkspaceUpdate: (update: WorkspaceUpdate) => void;
   onMessagesChange?: (messages: ChatMessage[]) => void;
+  existingSections: WorkspaceSection[];
   existingOkr: OKR | null;
   existingUnderstanding: string;
+  userContext: string;
+  completedSessions: CompletedSession[];
   language: "de" | "en";
   onLanguageChange: (lang: "de" | "en") => void;
 }
 
 export default function VoiceCoach({
-  onOkrUpdate,
+  onWorkspaceUpdate,
   onMessagesChange,
+  existingSections,
   existingOkr,
   existingUnderstanding,
+  userContext,
+  completedSessions,
   language,
   onLanguageChange,
 }: VoiceCoachProps) {
@@ -81,42 +87,55 @@ export default function VoiceCoach({
         addMessage(role, message.message);
       }
     },
+    onUnhandledClientToolCall: (params: { tool_name: string; tool_call_id: string; parameters: unknown }) => {
+      console.warn("[VoiceCoach] Unhandled client tool call:", params.tool_name, params);
+    },
+    onAgentToolRequest: (params: unknown) => {
+      console.log("[VoiceCoach] Agent tool request:", params);
+    },
     clientTools: {
-      update_okr: (parameters: Record<string, unknown>) => {
-        const update = parameters as unknown as OKRUpdate;
-        onOkrUpdate(update);
-        return "OKR updated on screen successfully";
+      update_workspace: (parameters: Record<string, unknown>) => {
+        console.log("[VoiceCoach] update_workspace called with:", JSON.stringify(parameters).slice(0, 500));
+
+        // Defensive: handle case where parameters might be stringified
+        let parsed = parameters;
+        if (typeof parameters === "string") {
+          try { parsed = JSON.parse(parameters); } catch { parsed = {}; }
+        }
+
+        const sections = (Array.isArray(parsed.sections) ? parsed.sections : []) as WorkspaceSection[];
+        const okr = (parsed.okr ?? null) as OKR | null;
+        const understanding = (typeof parsed.understanding === "string" ? parsed.understanding : "");
+
+        console.log("[VoiceCoach] Parsed workspace update:", { sectionsCount: sections.length, hasOkr: !!okr, understanding: understanding.slice(0, 100) });
+
+        onWorkspaceUpdate({ sections, okr, understanding });
+        return "Workspace updated on screen successfully";
       },
     },
   });
 
   const { status, isSpeaking } = conversation;
 
-  // Build session overrides (language + optional resume context)
+  // Build session overrides — three scenarios
   const buildOverrides = () => {
     const langInstruction = language === "de"
       ? "\n\n## Language\nRespond in German (Deutsch). The user's interface is set to German."
       : "";
 
-    if (existingOkr) {
-      // Resume session
-      const krList = existingOkr.key_results
-        .map((kr) => `- ${kr.label}: ${kr.text}`)
-        .join("\n");
+    const hasMidSession = existingSections.length > 0 || existingOkr !== null;
+    const hasUserContext = userContext.length > 0 || completedSessions.length > 0;
 
-      const krSummary = existingOkr.key_results.length > 0
-        ? (language === "de"
-            ? ` Wir hatten bisher ${existingOkr.key_results.length} Key Results.`
-            : ` We had ${existingOkr.key_results.length} key results so far.`)
-        : (language === "de"
-            ? " Wir haben noch keine Key Results formuliert."
-            : " We haven't drafted key results yet.");
+    // Scenario C: Resume mid-session
+    if (hasMidSession) {
+      const sectionsJson = JSON.stringify(existingSections);
+      const okrJson = existingOkr ? JSON.stringify(existingOkr) : "null";
 
-      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming)\nThe user was previously working on this OKR:\n\nObjective: ${existingOkr.objective}${krList ? `\nKey Results:\n${krList}` : ""}${existingUnderstanding ? `\n\nYour understanding of their goals: ${existingUnderstanding}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself or start over. Acknowledge briefly that you're picking up where you left off and ask what they'd like to refine next. Call update_okr immediately with the current OKR state so it appears on screen.`;
+      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming Mid-Session)\nThe user was in the middle of a coaching session. Here is the current workspace state:\n\nSections: ${sectionsJson}\nOKR: ${okrJson}${existingUnderstanding ? `\n\nYour understanding: ${existingUnderstanding}` : ""}${userContext ? `\n\nAccumulated user context: ${userContext}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself. Call update_workspace immediately with the current state so it appears on screen, then continue the conversation.`;
 
       const firstMessage = language === "de"
-        ? `Willkommen zurück! Wir haben an deinem OKR gearbeitet: "${existingOkr.objective.slice(0, 120)}".${krSummary} Was möchtest du als nächstes verfeinern oder bearbeiten?`
-        : `Welcome back! We were working on your OKR: "${existingOkr.objective.slice(0, 120)}".${krSummary} What would you like to refine or work on next?`;
+        ? "Willkommen zurück! Lass uns da weitermachen, wo wir aufgehört haben."
+        : "Welcome back! Let's continue where we left off.";
 
       return {
         agent: {
@@ -127,10 +146,33 @@ export default function VoiceCoach({
       };
     }
 
-    // Fresh session — override language + first message
+    // Scenario B: Returning user, starting new OKR
+    if (hasUserContext) {
+      const historySnippets = completedSessions
+        .slice(-5)
+        .map((s, i) => `${i + 1}. "${s.okr.objective}"`)
+        .join("\n");
+
+      const returningPrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Returning User Context\nThis user has worked with you before. Here's what you know about them:\n\n${userContext}${historySnippets ? `\n\nPrevious OKRs drafted:\n${historySnippets}` : ""}\n\nSkip the initial introductions and context-gathering basics — you already know this user. Greet them warmly as a returning client and ask what they'd like to work on next. Start with a context section to understand this session's focus.`;
+
+      const firstMessage = language === "de"
+        ? "Schön, dich wieder zu sehen! Was möchtest du dieses Mal angehen — ein neues OKR für dasselbe Team, oder etwas ganz anderes?"
+        : "Great to see you again! What would you like to work on this time — a new OKR for the same team, or something different?";
+
+      return {
+        agent: {
+          language,
+          firstMessage,
+          prompt: { prompt: returningPrompt },
+        },
+      };
+    }
+
+    // Scenario A: Fresh user
     return {
       agent: {
         language,
+        firstMessage: FIRST_MESSAGES[language],
         prompt: { prompt: SYSTEM_PROMPT + langInstruction },
       },
     };

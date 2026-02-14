@@ -1,28 +1,115 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import OKRDisplay from "@/components/OKRDisplay";
+import { useState, useCallback, useEffect, useRef } from "react";
+import WorkspaceDisplay from "@/components/WorkspaceDisplay";
 import VoiceCoach from "@/components/VoiceCoach";
 import DebugPanel from "@/components/DebugPanel";
-import type { OKR, OKRUpdate, ChatMessage } from "@/lib/types";
+import type { ChatMessage, WorkspaceUpdate, WorkspaceSection, OKR, CompletedSession } from "@/lib/types";
+import { loadState, saveState, createDefaultState } from "@/lib/storage";
 
 export default function Home() {
+  // Current session state
+  const [sections, setSections] = useState<WorkspaceSection[]>([]);
   const [okr, setOkr] = useState<OKR | null>(null);
   const [understanding, setUnderstanding] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [language, setLanguage] = useState<"de" | "en">("de");
 
-  const handleOkrUpdate = useCallback((update: OKRUpdate) => {
-    setOkr({
-      objective: update.objective,
-      key_results: update.key_results,
-    });
+  // Cross-session state
+  const [completedSessions, setCompletedSessions] = useState<CompletedSession[]>([]);
+  const [userContext, setUserContext] = useState("");
+
+  // Hydration guard
+  const [isHydrated, setIsHydrated] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    const saved = loadState();
+    if (saved) {
+      setLanguage(saved.language);
+      setMessages(saved.currentSession.messages);
+      setSections(saved.currentSession.sections);
+      setOkr(saved.currentSession.okr);
+      setUnderstanding(saved.currentSession.understanding);
+      setCompletedSessions(saved.completedSessions);
+      setUserContext(saved.userContext);
+    }
+    setIsHydrated(true);
+  }, []);
+
+  // Persist to localStorage on state changes (debounced)
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveState({
+        version: 1,
+        language,
+        currentSession: {
+          messages,
+          sections,
+          okr,
+          understanding,
+        },
+        completedSessions,
+        userContext,
+      });
+    }, 300);
+  }, [isHydrated, language, messages, sections, okr, understanding, completedSessions, userContext]);
+
+  const handleWorkspaceUpdate = useCallback((update: WorkspaceUpdate) => {
+    setSections(update.sections);
+    setOkr(update.okr);
     setUnderstanding(update.understanding);
+    if (update.understanding) {
+      setUserContext(update.understanding);
+    }
   }, []);
 
   const handleMessagesChange = useCallback((newMessages: ChatMessage[]) => {
     setMessages(newMessages);
   }, []);
+
+  const handleNewOkr = useCallback(() => {
+    // Save current session to history if there's an OKR
+    if (okr) {
+      const session: CompletedSession = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        okr,
+        sections,
+        understanding,
+        messages,
+      };
+      setCompletedSessions((prev) => [...prev, session]);
+    }
+    // Clear current session but preserve userContext
+    setSections([]);
+    setOkr(null);
+    setUnderstanding("");
+    setMessages([]);
+  }, [okr, sections, understanding, messages]);
+
+  const handleReset = useCallback(() => {
+    const fresh = createDefaultState(language);
+    setSections(fresh.currentSession.sections);
+    setOkr(fresh.currentSession.okr);
+    setUnderstanding(fresh.currentSession.understanding);
+    setMessages(fresh.currentSession.messages);
+    setCompletedSessions(fresh.completedSessions);
+    setUserContext(fresh.userContext);
+  }, [language]);
+
+  const showNewOkrButton = okr !== null || sections.length > 0;
+
+  // Don't render until hydrated to prevent flash
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-[#1C1E31]" />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#1C1E31] relative overflow-hidden">
@@ -57,7 +144,19 @@ export default function Home() {
               Workpath AI Companion
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {showNewOkrButton && (
+              <button
+                onClick={handleNewOkr}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#C2C5CE] bg-[#363953]/60 hover:bg-[#363953] border border-[#363953] hover:border-[#48BCFE]/30 rounded-lg transition-all duration-200"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                New OKR
+              </button>
+            )}
             <span className={`text-xs ${okr ? "text-[#FADA51]" : "text-[#838895]"}`}>
               {okr ? "Drafting OKR..." : "Ready to coach"}
             </span>
@@ -69,18 +168,21 @@ export default function Home() {
           {/* Left column: Voice Companion (1/3) */}
           <section className="w-full lg:w-1/3 lg:sticky lg:top-8">
             <VoiceCoach
-              onOkrUpdate={handleOkrUpdate}
+              onWorkspaceUpdate={handleWorkspaceUpdate}
               onMessagesChange={handleMessagesChange}
+              existingSections={sections}
               existingOkr={okr}
               existingUnderstanding={understanding}
+              userContext={userContext}
+              completedSessions={completedSessions}
               language={language}
               onLanguageChange={setLanguage}
             />
           </section>
 
-          {/* Right column: OKR Display (2/3) */}
+          {/* Right column: Workspace Display (2/3) */}
           <section className="w-full lg:w-2/3">
-            <OKRDisplay okr={okr} />
+            <WorkspaceDisplay sections={sections} okr={okr} />
           </section>
         </div>
       </main>
@@ -88,8 +190,12 @@ export default function Home() {
       {/* Debug Panel */}
       <DebugPanel
         messages={messages}
+        sections={sections}
         okr={okr}
         understanding={understanding}
+        userContext={userContext}
+        completedSessions={completedSessions}
+        onReset={handleReset}
       />
     </div>
   );
