@@ -448,6 +448,7 @@ export default function VoiceCoach({
   }, [isSessionActive, isSpeaking, conversation]);
 
   const hasHistory = messages.length > 0;
+  const latestCoachMessage = [...messages].reverse().find((m) => m.role === "coach")?.text ?? null;
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -499,8 +500,15 @@ export default function VoiceCoach({
         </button>
       </div>
 
+      {/* Latest agent message */}
+      {latestCoachMessage && (
+        <p className="mt-3 text-sm text-[#C2C5CE] text-center leading-relaxed px-2 max-w-sm">
+          {latestCoachMessage}
+        </p>
+      )}
+
       {/* Status indicator */}
-      <div className="mt-1 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${
           isSessionActive
             ? isSpeaking ? "bg-[#669C89] animate-pulse"
