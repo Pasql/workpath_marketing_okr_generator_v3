@@ -118,3 +118,33 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Todo completion animations */
+@keyframes ripple-out {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes check-draw {
+  0% {
+    stroke-dashoffset: 30;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-ripple-out {
+  animation: ripple-out 0.6s ease-out forwards;
+}
+
+.animate-check-draw {
+  stroke-dasharray: 30;
+  animation: check-draw 0.4s ease-out 0.1s forwards;
+}
