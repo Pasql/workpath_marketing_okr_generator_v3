@@ -135,9 +135,14 @@ export default function Home() {
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-white tracking-tight">
-              Workpath AI Companion
-            </span>
+            <div>
+              <span className="text-sm font-semibold text-white tracking-tight block">
+                Generate OKRs with AI in seconds
+              </span>
+              <span className="text-[10px] text-[#838895] tracking-wide">
+                by Workpath
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {showNewOkrButton && (
