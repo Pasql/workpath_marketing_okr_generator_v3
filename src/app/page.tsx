@@ -128,39 +128,32 @@ export default function Home() {
 
       <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
-        <header className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#FADA51]/15 flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#FADA51]">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <span className="text-sm font-semibold text-white tracking-tight block">
-                Generate OKRs with AI in seconds
-              </span>
-              <span className="text-[10px] text-[#838895] tracking-wide">
-                by Workpath
-              </span>
+        <header className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://assets.website-files.com/5dc2f8d7ea14a892a3808af7/5ea00702ac88fbb1e9deecf2_Workpath_yellow.svg"
+              alt="Workpath"
+              className="h-3"
+            />
+            <div className="flex items-center gap-3">
+              {showNewOkrButton && (
+                <button
+                  onClick={handleNewOkr}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#C2C5CE] bg-[#363953]/60 hover:bg-[#363953] border border-[#363953] hover:border-[#48BCFE]/30 rounded-lg transition-all duration-200"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  New OKR
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {showNewOkrButton && (
-              <button
-                onClick={handleNewOkr}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#C2C5CE] bg-[#363953]/60 hover:bg-[#363953] border border-[#363953] hover:border-[#48BCFE]/30 rounded-lg transition-all duration-200"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                New OKR
-              </button>
-            )}
-            <span className={`text-xs ${outcome ? "text-[#FADA51]" : "text-[#838895]"}`}>
-              {outcome ? "Drafting OKR..." : "Ready to coach"}
-            </span>
-          </div>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight leading-tight">
+            Generate OKRs with AI in seconds
+          </h1>
         </header>
 
         {/* Two-column layout */}
