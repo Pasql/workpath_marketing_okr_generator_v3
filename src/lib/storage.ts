@@ -1,6 +1,6 @@
 import type { PersistedState } from "./types";
 
-const STORAGE_KEY = "workpath-okr-v3";
+const STORAGE_KEY = "workpath-okr-v4";
 
 export function loadState(): PersistedState | null {
   try {

@@ -146,46 +146,48 @@ export default function WorkspaceDisplay({ impact, outcome, output }: WorkspaceD
         )}
       </div>
 
-      {/* Three sections: Impact → Outcome → Output */}
+      {/* Sections: Impact (only when filled) → Outcome (always) → Output (only when filled) */}
       <div className="space-y-3">
-        {/* IMPACT: Strategy + KPIs */}
-        <SectionCard
-          icon={<ImpactIcon />}
-          title="Impact"
-          description="The overarching strategy and key metrics this OKR contributes to."
-          filled={impactFilled}
-        >
-          <div className="space-y-3">
-            {impact.strategy && (
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1 block">Strategy</span>
-                <p className="text-sm text-[#C2C5CE] leading-relaxed">{impact.strategy}</p>
-              </div>
-            )}
-            {impact.kpis.length > 0 && (
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1.5 block">KPIs / Lagging Indicators</span>
-                <div className="space-y-2">
-                  {impact.kpis.map((kpi, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <span className="shrink-0 text-[11px] font-bold text-[#48BCFE] bg-[#48BCFE]/10 px-2 py-0.5 rounded">
-                        {kpi.value}
-                      </span>
-                      <div>
-                        <span className="text-sm font-medium text-[#C2C5CE]">{kpi.label}</span>
-                        {kpi.description && (
-                          <p className="text-xs text-[#838895] mt-0.5">{kpi.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+        {/* IMPACT: Strategy + KPIs — only shown when filled */}
+        {impactFilled && (
+          <SectionCard
+            icon={<ImpactIcon />}
+            title="Impact"
+            description=""
+            filled
+          >
+            <div className="space-y-3">
+              {impact.strategy && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1 block">Strategy</span>
+                  <p className="text-sm text-[#C2C5CE] leading-relaxed">{impact.strategy}</p>
                 </div>
-              </div>
-            )}
-          </div>
-        </SectionCard>
+              )}
+              {impact.kpis.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1.5 block">KPIs / Lagging Indicators</span>
+                  <div className="space-y-2">
+                    {impact.kpis.map((kpi, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="shrink-0 text-[11px] font-bold text-[#48BCFE] bg-[#48BCFE]/10 px-2 py-0.5 rounded">
+                          {kpi.value}
+                        </span>
+                        <div>
+                          <span className="text-sm font-medium text-[#C2C5CE]">{kpi.label}</span>
+                          {kpi.description && (
+                            <p className="text-xs text-[#838895] mt-0.5">{kpi.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
 
-        {/* OUTCOME: OKR Draft — highlighted primary section */}
+        {/* OUTCOME: OKR Draft — always visible, highlighted */}
         <SectionCard
           icon={<OutcomeIcon />}
           title="Outcome — OKR Draft"
@@ -260,29 +262,31 @@ export default function WorkspaceDisplay({ impact, outcome, output }: WorkspaceD
           </div>
         </SectionCard>
 
-        {/* OUTPUT: Initiatives */}
-        <SectionCard
-          icon={<OutputIcon />}
-          title="Output"
-          description="Concrete actions, initiatives, and projects that drive your Key Results forward."
-          filled={output.initiatives.length > 0}
-        >
-          <div className="space-y-2">
-            {output.initiatives.map((init, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#669C89] mt-1.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#C2C5CE] leading-relaxed">{init.text}</p>
-                  {init.linked_kr && (
-                    <span className="inline-block mt-1 text-[10px] font-bold text-[#EFC92D] bg-[#EFC92D]/10 px-1.5 py-0.5 rounded">
-                      {init.linked_kr}
-                    </span>
-                  )}
+        {/* OUTPUT: Initiatives — only shown when filled */}
+        {output.initiatives.length > 0 && (
+          <SectionCard
+            icon={<OutputIcon />}
+            title="Output"
+            description=""
+            filled
+          >
+            <div className="space-y-2">
+              {output.initiatives.map((init, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#669C89] mt-1.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[#C2C5CE] leading-relaxed">{init.text}</p>
+                    {init.linked_kr && (
+                      <span className="inline-block mt-1 text-[10px] font-bold text-[#EFC92D] bg-[#EFC92D]/10 px-1.5 py-0.5 rounded">
+                        {init.linked_kr}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
+              ))}
+            </div>
+          </SectionCard>
+        )}
       </div>
     </div>
   );
