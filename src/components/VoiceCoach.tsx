@@ -44,7 +44,6 @@ export default function VoiceCoach({
 }: VoiceCoachProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
-  const transcriptRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>(existingTodos);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -64,13 +63,6 @@ export default function VoiceCoach({
   useEffect(() => {
     setTodos(existingTodos);
   }, [existingTodos]);
-
-  // Auto-scroll transcript
-  useEffect(() => {
-    if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   // Sync messages to parent
   useEffect(() => {
@@ -546,30 +538,6 @@ export default function VoiceCoach({
         >
           EN
         </button>
-      </div>
-
-      {/* Transcript */}
-      <div ref={transcriptRef} className="mt-4 w-full overflow-y-auto space-y-2 px-1" style={{ maxHeight: 300 }}>
-        {messages.length === 0 && !isSessionActive && (
-          <p className="text-xs text-[#838895] text-center italic py-4">
-            Start a session to begin your OKR coaching conversation.
-          </p>
-        )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`text-xs leading-relaxed px-3 py-2 rounded-lg ${
-              msg.role === "coach" ? "bg-[#669C89]/[0.08] text-[#C2C5CE]" : "bg-[#363953]/40 text-[#C2C5CE]"
-            }`}
-          >
-            <span className={`font-semibold text-[10px] uppercase tracking-wider ${
-              msg.role === "coach" ? "text-[#669C89]" : "text-[#48BCFE]"
-            }`}>
-              {msg.role === "coach" ? "Companion" : "You"}
-            </span>
-            <p className="mt-0.5">{msg.text}</p>
-          </div>
-        ))}
       </div>
 
       {/* Coaching progress */}
