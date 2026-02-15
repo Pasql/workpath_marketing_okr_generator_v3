@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { OKR, ChatMessage, TodoItem, KPI, Initiative, CompletedSession } from "@/lib/types";
+import type { OKR, ChatMessage, TodoItem, Impact, Output, CompletedSession } from "@/lib/types";
 
 interface DebugPanelProps {
   messages: ChatMessage[];
   todos: TodoItem[];
-  strategy: string | null;
-  kpis: KPI[];
-  okr: OKR | null;
-  initiatives: Initiative[];
+  impact: Impact;
+  outcome: OKR | null;
+  output: Output;
   understanding: string;
   userContext: string;
   completedSessions: CompletedSession[];
@@ -21,10 +20,9 @@ type TabId = "transcript" | "workspace" | "todos" | "context" | "history";
 export default function DebugPanel({
   messages,
   todos,
-  strategy,
-  kpis,
-  okr,
-  initiatives,
+  impact,
+  outcome,
+  output,
   understanding,
   userContext,
   completedSessions,
@@ -132,7 +130,7 @@ export default function DebugPanel({
 
             {activeTab === "workspace" && (
               <pre className="text-xs text-[#C2C5CE] font-mono whitespace-pre-wrap leading-relaxed">
-                {JSON.stringify({ strategy, kpis, okr, initiatives }, null, 2)}
+                {JSON.stringify({ impact, outcome, output }, null, 2)}
               </pre>
             )}
 

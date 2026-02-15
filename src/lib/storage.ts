@@ -7,7 +7,7 @@ export function loadState(): PersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.version !== 2) return null;
+    if (parsed?.version !== 3) return null;
     return parsed as PersistedState;
   } catch {
     return null;
@@ -18,7 +18,7 @@ export function saveState(state: PersistedState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
-    // Quota exceeded (e.g. Safari private browsing) — silently ignore
+    // Quota exceeded — silently ignore
   }
 }
 
@@ -26,17 +26,19 @@ export function clearState(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+export const EMPTY_IMPACT = { strategy: null, kpis: [] };
+export const EMPTY_OUTPUT = { initiatives: [] };
+
 export function createDefaultState(language: "de" | "en" = "de"): PersistedState {
   return {
-    version: 2,
+    version: 3,
     language,
     currentSession: {
       messages: [],
       todos: [],
-      strategy: null,
-      kpis: [],
-      okr: null,
-      initiatives: [],
+      impact: { ...EMPTY_IMPACT },
+      outcome: null,
+      output: { ...EMPTY_OUTPUT },
       understanding: "",
     },
     completedSessions: [],

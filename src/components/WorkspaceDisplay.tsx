@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { OKR, KPI, Initiative } from "@/lib/types";
+import type { Impact, OKR, Output } from "@/lib/types";
 
 interface WorkspaceDisplayProps {
-  strategy: string | null;
-  kpis: KPI[];
-  okr: OKR | null;
-  initiatives: Initiative[];
+  impact: Impact;
+  outcome: OKR | null;
+  output: Output;
 }
 
 function SectionCard({
@@ -66,7 +65,7 @@ function SectionCard({
 
 // --- Icons ---
 
-function StrategyIcon() {
+function ImpactIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
@@ -75,15 +74,7 @@ function StrategyIcon() {
   );
 }
 
-function KpisIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 20V10M12 20V4M6 20v-6" />
-    </svg>
-  );
-}
-
-function OkrIcon() {
+function OutcomeIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
@@ -93,7 +84,7 @@ function OkrIcon() {
   );
 }
 
-function InitiativesIcon() {
+function OutputIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
@@ -102,19 +93,19 @@ function InitiativesIcon() {
   );
 }
 
-export default function WorkspaceDisplay({ strategy, kpis, okr, initiatives }: WorkspaceDisplayProps) {
+export default function WorkspaceDisplay({ impact, outcome, output }: WorkspaceDisplayProps) {
   const [displayedOkr, setDisplayedOkr] = useState<OKR | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const prevOkrRef = useRef<string>("");
 
   useEffect(() => {
-    const serialized = okr ? JSON.stringify(okr) : "";
+    const serialized = outcome ? JSON.stringify(outcome) : "";
     if (serialized !== prevOkrRef.current) {
       prevOkrRef.current = serialized;
-      if (okr) {
+      if (outcome) {
         setIsTransitioning(true);
         const timer = setTimeout(() => {
-          setDisplayedOkr(okr);
+          setDisplayedOkr(outcome);
           setIsTransitioning(false);
         }, 150);
         return () => clearTimeout(timer);
@@ -122,9 +113,10 @@ export default function WorkspaceDisplay({ strategy, kpis, okr, initiatives }: W
         setDisplayedOkr(null);
       }
     }
-  }, [okr]);
+  }, [outcome]);
 
-  const hasAnyContent = strategy || kpis.length > 0 || displayedOkr || initiatives.length > 0;
+  const impactFilled = impact.strategy !== null || impact.kpis.length > 0;
+  const hasAnyContent = impactFilled || displayedOkr || output.initiatives.length > 0;
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -154,46 +146,49 @@ export default function WorkspaceDisplay({ strategy, kpis, okr, initiatives }: W
         )}
       </div>
 
-      {/* Four sections */}
+      {/* Three sections: Impact → Outcome → Output */}
       <div className="space-y-3">
-        {/* Strategy */}
+        {/* IMPACT: Strategy + KPIs */}
         <SectionCard
-          icon={<StrategyIcon />}
-          title="Strategy"
-          description="The overarching strategy or company goal this OKR contributes to."
-          filled={!!strategy}
+          icon={<ImpactIcon />}
+          title="Impact"
+          description="The overarching strategy and key metrics this OKR contributes to."
+          filled={impactFilled}
         >
-          <p className="text-sm text-[#C2C5CE] leading-relaxed">{strategy}</p>
-        </SectionCard>
-
-        {/* KPIs */}
-        <SectionCard
-          icon={<KpisIcon />}
-          title="KPIs / Lagging Indicators"
-          description="Key metrics and performance indicators this OKR should move."
-          filled={kpis.length > 0}
-        >
-          <div className="space-y-2">
-            {kpis.map((kpi, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <span className="shrink-0 text-[11px] font-bold text-[#48BCFE] bg-[#48BCFE]/10 px-2 py-0.5 rounded">
-                  {kpi.value}
-                </span>
-                <div>
-                  <span className="text-sm font-medium text-[#C2C5CE]">{kpi.label}</span>
-                  {kpi.description && (
-                    <p className="text-xs text-[#838895] mt-0.5">{kpi.description}</p>
-                  )}
+          <div className="space-y-3">
+            {impact.strategy && (
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1 block">Strategy</span>
+                <p className="text-sm text-[#C2C5CE] leading-relaxed">{impact.strategy}</p>
+              </div>
+            )}
+            {impact.kpis.length > 0 && (
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#838895] mb-1.5 block">KPIs / Lagging Indicators</span>
+                <div className="space-y-2">
+                  {impact.kpis.map((kpi, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className="shrink-0 text-[11px] font-bold text-[#48BCFE] bg-[#48BCFE]/10 px-2 py-0.5 rounded">
+                        {kpi.value}
+                      </span>
+                      <div>
+                        <span className="text-sm font-medium text-[#C2C5CE]">{kpi.label}</span>
+                        {kpi.description && (
+                          <p className="text-xs text-[#838895] mt-0.5">{kpi.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </SectionCard>
 
-        {/* OKR Draft — highlighted primary section */}
+        {/* OUTCOME: OKR Draft — highlighted primary section */}
         <SectionCard
-          icon={<OkrIcon />}
-          title="OKR Draft"
+          icon={<OutcomeIcon />}
+          title="Outcome — OKR Draft"
           description="Your Objective and Key Results — the core outcome you're committing to."
           filled={!!displayedOkr}
           highlight
@@ -265,15 +260,15 @@ export default function WorkspaceDisplay({ strategy, kpis, okr, initiatives }: W
           </div>
         </SectionCard>
 
-        {/* Initiatives */}
+        {/* OUTPUT: Initiatives */}
         <SectionCard
-          icon={<InitiativesIcon />}
-          title="Initiatives"
-          description="Concrete actions and projects that drive your Key Results forward."
-          filled={initiatives.length > 0}
+          icon={<OutputIcon />}
+          title="Output"
+          description="Concrete actions, initiatives, and projects that drive your Key Results forward."
+          filled={output.initiatives.length > 0}
         >
           <div className="space-y-2">
-            {initiatives.map((init, i) => (
+            {output.initiatives.map((init, i) => (
               <div key={i} className="flex items-start gap-2.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#669C89] mt-1.5 shrink-0" />
                 <div className="flex-1 min-w-0">

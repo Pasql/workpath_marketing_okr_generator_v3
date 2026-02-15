@@ -4,16 +4,15 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import WorkspaceDisplay from "@/components/WorkspaceDisplay";
 import VoiceCoach from "@/components/VoiceCoach";
 import DebugPanel from "@/components/DebugPanel";
-import type { ChatMessage, TodoItem, KPI, OKR, Initiative, CompletedSession } from "@/lib/types";
-import { loadState, saveState, createDefaultState } from "@/lib/storage";
+import type { ChatMessage, TodoItem, Impact, OKR, Output, WorkspaceData, CompletedSession } from "@/lib/types";
+import { loadState, saveState, createDefaultState, EMPTY_IMPACT, EMPTY_OUTPUT } from "@/lib/storage";
 
 export default function Home() {
   // Current session state
   const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [strategy, setStrategy] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<KPI[]>([]);
-  const [okr, setOkr] = useState<OKR | null>(null);
-  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
+  const [impact, setImpact] = useState<Impact>({ ...EMPTY_IMPACT });
+  const [outcome, setOutcome] = useState<OKR | null>(null);
+  const [output, setOutput] = useState<Output>({ ...EMPTY_OUTPUT });
   const [understanding, setUnderstanding] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [language, setLanguage] = useState<"de" | "en">("de");
@@ -33,10 +32,9 @@ export default function Home() {
       setLanguage(saved.language);
       setMessages(saved.currentSession.messages);
       setTodos(saved.currentSession.todos);
-      setStrategy(saved.currentSession.strategy);
-      setKpis(saved.currentSession.kpis);
-      setOkr(saved.currentSession.okr);
-      setInitiatives(saved.currentSession.initiatives);
+      setImpact(saved.currentSession.impact);
+      setOutcome(saved.currentSession.outcome);
+      setOutput(saved.currentSession.output);
       setUnderstanding(saved.currentSession.understanding);
       setCompletedSessions(saved.completedSessions);
       setUserContext(saved.userContext);
@@ -50,22 +48,21 @@ export default function Home() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveState({
-        version: 2,
+        version: 3,
         language,
         currentSession: {
           messages,
           todos,
-          strategy,
-          kpis,
-          okr,
-          initiatives,
+          impact,
+          outcome,
+          output,
           understanding,
         },
         completedSessions,
         userContext,
       });
     }, 300);
-  }, [isHydrated, language, messages, todos, strategy, kpis, okr, initiatives, understanding, completedSessions, userContext]);
+  }, [isHydrated, language, messages, todos, impact, outcome, output, understanding, completedSessions, userContext]);
 
   // Tool callbacks
   const handleTodosUpdate = useCallback((newTodos: TodoItem[], newUnderstanding: string) => {
@@ -74,49 +71,48 @@ export default function Home() {
     if (newUnderstanding) setUserContext(newUnderstanding);
   }, []);
 
-  const handleStrategyUpdate = useCallback((s: string) => setStrategy(s), []);
-  const handleKpisUpdate = useCallback((k: KPI[]) => setKpis(k), []);
-  const handleOkrUpdate = useCallback((o: OKR) => setOkr(o), []);
-  const handleInitiativesUpdate = useCallback((i: Initiative[]) => setInitiatives(i), []);
+  const handleWorkspaceUpdate = useCallback((data: Partial<WorkspaceData>) => {
+    if (data.impact) setImpact(data.impact);
+    if (data.outcome) setOutcome(data.outcome);
+    if (data.output) setOutput(data.output);
+  }, []);
+
   const handleMessagesChange = useCallback((m: ChatMessage[]) => setMessages(m), []);
 
   const handleNewOkr = useCallback(() => {
-    if (okr) {
+    if (outcome) {
       const session: CompletedSession = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
-        okr,
-        strategy,
-        kpis,
-        initiatives,
+        okr: outcome,
+        impact,
+        output,
         understanding,
         messages,
       };
       setCompletedSessions((prev) => [...prev, session]);
     }
     setTodos([]);
-    setStrategy(null);
-    setKpis([]);
-    setOkr(null);
-    setInitiatives([]);
+    setImpact({ ...EMPTY_IMPACT });
+    setOutcome(null);
+    setOutput({ ...EMPTY_OUTPUT });
     setUnderstanding("");
     setMessages([]);
-  }, [okr, strategy, kpis, initiatives, understanding, messages]);
+  }, [outcome, impact, output, understanding, messages]);
 
   const handleReset = useCallback(() => {
     const fresh = createDefaultState(language);
     setTodos(fresh.currentSession.todos);
-    setStrategy(fresh.currentSession.strategy);
-    setKpis(fresh.currentSession.kpis);
-    setOkr(fresh.currentSession.okr);
-    setInitiatives(fresh.currentSession.initiatives);
+    setImpact(fresh.currentSession.impact);
+    setOutcome(fresh.currentSession.outcome);
+    setOutput(fresh.currentSession.output);
     setUnderstanding(fresh.currentSession.understanding);
     setMessages(fresh.currentSession.messages);
     setCompletedSessions(fresh.completedSessions);
     setUserContext(fresh.userContext);
   }, [language]);
 
-  const showNewOkrButton = okr !== null || todos.length > 0 || strategy !== null;
+  const showNewOkrButton = outcome !== null || todos.length > 0 || impact.strategy !== null;
 
   if (!isHydrated) {
     return <div className="min-h-screen bg-[#1C1E31]" />;
@@ -156,8 +152,8 @@ export default function Home() {
                 New OKR
               </button>
             )}
-            <span className={`text-xs ${okr ? "text-[#FADA51]" : "text-[#838895]"}`}>
-              {okr ? "Drafting OKR..." : "Ready to coach"}
+            <span className={`text-xs ${outcome ? "text-[#FADA51]" : "text-[#838895]"}`}>
+              {outcome ? "Drafting OKR..." : "Ready to coach"}
             </span>
           </div>
         </header>
@@ -167,16 +163,12 @@ export default function Home() {
           <section className="w-full lg:w-1/3 lg:sticky lg:top-8">
             <VoiceCoach
               onTodosUpdate={handleTodosUpdate}
-              onStrategyUpdate={handleStrategyUpdate}
-              onKpisUpdate={handleKpisUpdate}
-              onOkrUpdate={handleOkrUpdate}
-              onInitiativesUpdate={handleInitiativesUpdate}
+              onWorkspaceUpdate={handleWorkspaceUpdate}
               onMessagesChange={handleMessagesChange}
               existingTodos={todos}
-              existingStrategy={strategy}
-              existingKpis={kpis}
-              existingOkr={okr}
-              existingInitiatives={initiatives}
+              existingImpact={impact}
+              existingOutcome={outcome}
+              existingOutput={output}
               existingUnderstanding={understanding}
               userContext={userContext}
               completedSessions={completedSessions}
@@ -187,10 +179,9 @@ export default function Home() {
 
           <section className="w-full lg:w-2/3">
             <WorkspaceDisplay
-              strategy={strategy}
-              kpis={kpis}
-              okr={okr}
-              initiatives={initiatives}
+              impact={impact}
+              outcome={outcome}
+              output={output}
             />
           </section>
         </div>
@@ -199,10 +190,9 @@ export default function Home() {
       <DebugPanel
         messages={messages}
         todos={todos}
-        strategy={strategy}
-        kpis={kpis}
-        okr={okr}
-        initiatives={initiatives}
+        impact={impact}
+        outcome={outcome}
+        output={output}
         understanding={understanding}
         userContext={userContext}
         completedSessions={completedSessions}

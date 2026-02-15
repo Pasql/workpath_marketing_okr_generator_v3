@@ -15,7 +15,7 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-// --- Coaching to-do items ---
+// --- Coaching to-do items (left side) ---
 
 export interface TodoItem {
   id: string;
@@ -23,7 +23,7 @@ export interface TodoItem {
   completed: boolean;
 }
 
-// --- Right-side structured sections ---
+// --- Right-side: Impact / Outcome / Output ---
 
 export interface KPI {
   label: string;
@@ -36,15 +36,31 @@ export interface Initiative {
   linked_kr: string;
 }
 
+export interface Impact {
+  strategy: string | null;
+  kpis: KPI[];
+}
+
+export interface Output {
+  initiatives: Initiative[];
+}
+
+// --- Workspace update (single tool payload for right side) ---
+
+export interface WorkspaceData {
+  impact: Impact;
+  outcome: OKR | null;
+  output: Output;
+}
+
 // --- Multi-session history ---
 
 export interface CompletedSession {
   id: string;
   timestamp: number;
   okr: OKR;
-  strategy: string | null;
-  kpis: KPI[];
-  initiatives: Initiative[];
+  impact: Impact;
+  output: Output;
   understanding: string;
   messages: ChatMessage[];
 }
@@ -52,15 +68,14 @@ export interface CompletedSession {
 // --- Persisted state ---
 
 export interface PersistedState {
-  version: 2;
+  version: 3;
   language: "de" | "en";
   currentSession: {
     messages: ChatMessage[];
     todos: TodoItem[];
-    strategy: string | null;
-    kpis: KPI[];
-    okr: OKR | null;
-    initiatives: Initiative[];
+    impact: Impact;
+    outcome: OKR | null;
+    output: Output;
     understanding: string;
   };
   completedSessions: CompletedSession[];

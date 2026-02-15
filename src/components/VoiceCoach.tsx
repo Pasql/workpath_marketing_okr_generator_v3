@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useConversation } from "@elevenlabs/react";
-import type { ChatMessage, TodoItem, KPI, OKR, Initiative, CompletedSession } from "@/lib/types";
-import { SYSTEM_PROMPT, FIRST_MESSAGE_EN } from "@/lib/system-prompt";
+import type { ChatMessage, TodoItem, Impact, OKR, Output, WorkspaceData, CompletedSession } from "@/lib/types";
 import TodoList from "./TodoList";
 
 const NUM_BARS = 72;
@@ -16,16 +15,12 @@ const IDLE = { r: 131, g: 136, b: 149 };         // #838895 - grey-dark idle
 
 interface VoiceCoachProps {
   onTodosUpdate: (todos: TodoItem[], understanding: string) => void;
-  onStrategyUpdate: (strategy: string) => void;
-  onKpisUpdate: (kpis: KPI[]) => void;
-  onOkrUpdate: (okr: OKR) => void;
-  onInitiativesUpdate: (initiatives: Initiative[]) => void;
+  onWorkspaceUpdate: (data: Partial<WorkspaceData>) => void;
   onMessagesChange?: (messages: ChatMessage[]) => void;
   existingTodos: TodoItem[];
-  existingStrategy: string | null;
-  existingKpis: KPI[];
-  existingOkr: OKR | null;
-  existingInitiatives: Initiative[];
+  existingImpact: Impact;
+  existingOutcome: OKR | null;
+  existingOutput: Output;
   existingUnderstanding: string;
   userContext: string;
   completedSessions: CompletedSession[];
@@ -35,16 +30,12 @@ interface VoiceCoachProps {
 
 export default function VoiceCoach({
   onTodosUpdate,
-  onStrategyUpdate,
-  onKpisUpdate,
-  onOkrUpdate,
-  onInitiativesUpdate,
+  onWorkspaceUpdate,
   onMessagesChange,
   existingTodos,
-  existingStrategy,
-  existingKpis,
-  existingOkr,
-  existingInitiatives,
+  existingImpact,
+  existingOutcome,
+  existingOutput,
   existingUnderstanding,
   userContext,
   completedSessions,
@@ -62,6 +53,12 @@ export default function VoiceCoach({
   // Visualization data refs
   const barsRef = useRef<number[]>(new Array(NUM_BARS).fill(0));
   const targetBarsRef = useRef<number[]>(new Array(NUM_BARS).fill(0));
+
+  // Refs for stable callback access to latest props
+  const onTodosUpdateRef = useRef(onTodosUpdate);
+  const onWorkspaceUpdateRef = useRef(onWorkspaceUpdate);
+  useEffect(() => { onTodosUpdateRef.current = onTodosUpdate; }, [onTodosUpdate]);
+  useEffect(() => { onWorkspaceUpdateRef.current = onWorkspaceUpdate; }, [onWorkspaceUpdate]);
 
   // Sync todos from parent when they change externally
   useEffect(() => {
@@ -98,15 +95,100 @@ export default function VoiceCoach({
     return (params as Record<string, unknown>) || {};
   };
 
+  // Normalize a todo item — LLM may send {item, completed} instead of {id, text, completed}
+  const normalizeTodo = (raw: Record<string, unknown>, index: number): TodoItem => {
+    const text = typeof raw.text === "string" ? raw.text
+      : typeof raw.item === "string" ? raw.item
+      : String(raw.text ?? raw.item ?? `Step ${index + 1}`);
+    const id = typeof raw.id === "string" ? raw.id : `step-${index + 1}`;
+    const completed = raw.completed === true;
+    return { id, text, completed };
+  };
+
+  // Normalize KPI — LLM may send strings instead of objects
+  const normalizeKpi = (raw: unknown): { label: string; value: string; description: string } | null => {
+    if (typeof raw === "string") return { label: raw, value: "", description: "" };
+    if (raw && typeof raw === "object") {
+      const r = raw as Record<string, unknown>;
+      return {
+        label: String(r.label ?? r.name ?? ""),
+        value: String(r.value ?? r.target ?? ""),
+        description: String(r.description ?? ""),
+      };
+    }
+    return null;
+  };
+
+  // Client tools — defined once, using refs for stable prop access
+  const clientTools = useRef({
+    update_todos: (rawParams: Record<string, unknown>) => {
+      const params = safeParse(rawParams);
+      console.log("[VoiceCoach] update_todos called:", JSON.stringify(params).slice(0, 500));
+      const rawTodos = Array.isArray(params.todos) ? params.todos : [];
+      const newTodos = rawTodos.map((t: Record<string, unknown>, i: number) => normalizeTodo(t, i));
+      const understanding = (typeof params.understanding === "string" ? params.understanding : "");
+      setTodos(newTodos);
+      onTodosUpdateRef.current(newTodos, understanding);
+      return "ok";
+    },
+    update_workspace: (rawParams: Record<string, unknown>) => {
+      const params = safeParse(rawParams);
+      console.log("[VoiceCoach] update_workspace called:", JSON.stringify(params).slice(0, 500));
+
+      const update: Partial<WorkspaceData> = {};
+
+      // Parse impact — handle both nested and flat formats
+      if (params.impact && typeof params.impact === "object") {
+        const imp = params.impact as Record<string, unknown>;
+        const rawKpis = Array.isArray(imp.kpis) ? imp.kpis : [];
+        update.impact = {
+          strategy: typeof imp.strategy === "string" ? imp.strategy : null,
+          kpis: rawKpis.map(normalizeKpi).filter((k): k is NonNullable<typeof k> => k !== null),
+        };
+      }
+      // Also check top-level strategy (LLM sometimes puts it there)
+      if (typeof params.strategy === "string" && !update.impact) {
+        update.impact = {
+          strategy: params.strategy,
+          kpis: [],
+        };
+      }
+
+      // Parse outcome (OKR)
+      if (params.outcome && typeof params.outcome === "object") {
+        const out = params.outcome as Record<string, unknown>;
+        update.outcome = {
+          objective: typeof out.objective === "string" ? out.objective : "",
+          key_results: Array.isArray(out.key_results) ? out.key_results : [],
+        };
+      }
+
+      // Parse output (initiatives)
+      if (params.output && typeof params.output === "object") {
+        const o = params.output as Record<string, unknown>;
+        update.output = {
+          initiatives: Array.isArray(o.initiatives) ? o.initiatives : [],
+        };
+      }
+
+      onWorkspaceUpdateRef.current(update);
+      return "ok";
+    },
+  }).current;
+
   const conversation = useConversation({
+    clientTools,
     onConnect: () => {
+      console.log("[VoiceCoach] Connected");
       setConnectionError(null);
     },
     onDisconnect: () => {
+      console.log("[VoiceCoach] Disconnected");
       setIsSessionActive(false);
     },
     onError: (error: unknown) => {
       const msg = error instanceof Error ? error.message : String(error);
+      console.error("[VoiceCoach] Error:", msg);
       setConnectionError(msg);
       setIsSessionActive(false);
     },
@@ -116,73 +198,35 @@ export default function VoiceCoach({
         addMessage(role, message.message);
       }
     },
-    onUnhandledClientToolCall: (params: { tool_name: string; tool_call_id: string }) => {
-      console.warn("[VoiceCoach] Unhandled client tool:", params.tool_name);
+    onDebug: (msg: unknown) => {
+      console.log("[VoiceCoach] debug:", JSON.stringify(msg).slice(0, 300));
     },
-    clientTools: {
-      update_todos: (rawParams: Record<string, unknown>) => {
-        const params = safeParse(rawParams);
-        console.log("[VoiceCoach] update_todos:", JSON.stringify(params).slice(0, 300));
-        const newTodos = (Array.isArray(params.todos) ? params.todos : []) as TodoItem[];
-        const understanding = (typeof params.understanding === "string" ? params.understanding : "");
-        setTodos(newTodos);
-        onTodosUpdate(newTodos, understanding);
-        return "ok";
-      },
-      update_strategy: (rawParams: Record<string, unknown>) => {
-        const params = safeParse(rawParams);
-        console.log("[VoiceCoach] update_strategy:", JSON.stringify(params).slice(0, 300));
-        const strategy = (typeof params.strategy === "string" ? params.strategy : "");
-        onStrategyUpdate(strategy);
-        return "ok";
-      },
-      update_kpis: (rawParams: Record<string, unknown>) => {
-        const params = safeParse(rawParams);
-        console.log("[VoiceCoach] update_kpis:", JSON.stringify(params).slice(0, 300));
-        const kpis = (Array.isArray(params.kpis) ? params.kpis : []) as KPI[];
-        onKpisUpdate(kpis);
-        return "ok";
-      },
-      update_okr: (rawParams: Record<string, unknown>) => {
-        const params = safeParse(rawParams);
-        console.log("[VoiceCoach] update_okr:", JSON.stringify(params).slice(0, 300));
-        const objective = (typeof params.objective === "string" ? params.objective : "");
-        const key_results = (Array.isArray(params.key_results) ? params.key_results : []) as OKR["key_results"];
-        onOkrUpdate({ objective, key_results });
-        return "ok";
-      },
-      update_initiatives: (rawParams: Record<string, unknown>) => {
-        const params = safeParse(rawParams);
-        console.log("[VoiceCoach] update_initiatives:", JSON.stringify(params).slice(0, 300));
-        const initiatives = (Array.isArray(params.initiatives) ? params.initiatives : []) as Initiative[];
-        onInitiativesUpdate(initiatives);
-        return "ok";
-      },
+    onUnhandledClientToolCall: (params: { tool_name: string; tool_call_id: string }) => {
+      console.warn("[VoiceCoach] UNHANDLED client tool:", params.tool_name, params.tool_call_id);
     },
   });
 
   const { status, isSpeaking } = conversation;
 
   // Build session overrides — three scenarios
-  const buildOverrides = () => {
+  // basePrompt is fetched from ElevenLabs (single source of truth)
+  const buildOverrides = (basePrompt: string) => {
     const langInstruction = language === "de"
       ? "\n\n## Language\nRespond in German (Deutsch). The user's interface is set to German."
       : "";
 
-    const hasMidSession = existingTodos.length > 0 || existingOkr !== null || existingStrategy !== null || existingKpis.length > 0 || existingInitiatives.length > 0;
+    const hasMidSession = existingTodos.length > 0 || existingOutcome !== null || existingImpact.strategy !== null || existingImpact.kpis.length > 0 || existingOutput.initiatives.length > 0;
     const hasUserContext = userContext.length > 0 || completedSessions.length > 0;
 
     // Scenario C: Resume mid-session
     if (hasMidSession) {
       const stateJson = JSON.stringify({
-        todos: existingTodos,
-        strategy: existingStrategy,
-        kpis: existingKpis,
-        okr: existingOkr,
-        initiatives: existingInitiatives,
+        impact: existingImpact,
+        outcome: existingOutcome,
+        output: existingOutput,
       });
 
-      const resumePrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Session Context (Resuming Mid-Session)\nThe user was in the middle of a coaching session. Current state:\n${stateJson}${existingUnderstanding ? `\n\nYour understanding: ${existingUnderstanding}` : ""}${userContext ? `\n\nAccumulated user context: ${userContext}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself. Call update_todos immediately with the current todos, and any other tools needed to restore the screen, then continue the conversation.`;
+      const resumePrompt = basePrompt + langInstruction + `\n\n## Session Context (Resuming Mid-Session)\nThe user was in the middle of a coaching session. Current state:\n${stateJson}${existingUnderstanding ? `\n\nYour understanding: ${existingUnderstanding}` : ""}${userContext ? `\n\nAccumulated user context: ${userContext}` : ""}\n\nContinue coaching from where you left off. Don't re-introduce yourself. Call update_todos immediately with the current todos, and update_workspace to restore the screen, then continue the conversation.`;
 
       const firstMessage = language === "de"
         ? "Willkommen zurück! Lass uns da weitermachen, wo wir aufgehört haben."
@@ -204,7 +248,7 @@ export default function VoiceCoach({
         .map((s, i) => `${i + 1}. "${s.okr.objective}"`)
         .join("\n");
 
-      const returningPrompt = SYSTEM_PROMPT + langInstruction + `\n\n## Returning User Context\nThis user has worked with you before. Here's what you know about them:\n\n${userContext}${historySnippets ? `\n\nPrevious OKRs drafted:\n${historySnippets}` : ""}\n\nSkip the initial introductions — you already know this user. Greet them warmly and ask what they'd like to work on next. Call update_todos immediately with a fresh coaching roadmap.`;
+      const returningPrompt = basePrompt + langInstruction + `\n\n## Returning User Context\nThis user has worked with you before. Here's what you know about them:\n\n${userContext}${historySnippets ? `\n\nPrevious OKRs drafted:\n${historySnippets}` : ""}\n\nSkip the initial introductions — you already know this user. Greet them warmly and ask what they'd like to work on next. Call update_todos immediately with a fresh coaching roadmap.`;
 
       const firstMessage = language === "de"
         ? "Schön, dich wieder zu sehen! Was möchtest du dieses Mal angehen — ein neues OKR für dasselbe Team, oder etwas ganz anderes?"
@@ -219,16 +263,8 @@ export default function VoiceCoach({
       };
     }
 
-    // Scenario A: Fresh user
-    // German first message comes from ElevenLabs agent config; only override for English
-    const freshOverride: Record<string, unknown> = {
-      language,
-      prompt: { prompt: SYSTEM_PROMPT + langInstruction },
-    };
-    if (language === "en") {
-      freshOverride.firstMessage = FIRST_MESSAGE_EN;
-    }
-    return { agent: freshOverride };
+    // Scenario A: Fresh user — only override language (prompt and first message come from ElevenLabs)
+    return { agent: { language } };
   };
 
   // Start or end session
@@ -248,12 +284,14 @@ export default function VoiceCoach({
       }
 
       let sessionConfig: Parameters<typeof conversation.startSession>[0];
+      let systemPrompt = "";
 
       try {
         const res = await fetch("/api/elevenlabs-signed-url");
         if (res.ok) {
-          const { signedUrl } = await res.json();
-          sessionConfig = { signedUrl };
+          const data = await res.json();
+          sessionConfig = { signedUrl: data.signedUrl };
+          systemPrompt = data.systemPrompt || "";
         } else {
           throw new Error("No signed URL");
         }
@@ -264,9 +302,13 @@ export default function VoiceCoach({
         };
       }
 
-      const overrides = buildOverrides();
+      const overrides = buildOverrides(systemPrompt);
       (sessionConfig as Record<string, unknown>).overrides = overrides;
 
+      // Pass clientTools directly in startSession for reliable dispatch
+      (sessionConfig as Record<string, unknown>).clientTools = clientTools;
+
+      console.log("[VoiceCoach] Starting session with clientTools:", Object.keys(clientTools));
       await conversation.startSession(sessionConfig);
       setIsSessionActive(true);
     } catch (err) {

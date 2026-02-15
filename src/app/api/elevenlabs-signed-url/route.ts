@@ -12,26 +12,39 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
-      {
-        headers: {
-          "xi-api-key": apiKey,
-        },
-      }
-    );
+    // Fetch signed URL and agent prompt in parallel
+    const [urlRes, agentRes] = await Promise.all([
+      fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
+        { headers: { "xi-api-key": apiKey } }
+      ),
+      fetch(
+        `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
+        { headers: { "xi-api-key": apiKey } }
+      ),
+    ]);
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (!urlRes.ok) {
+      const errorText = await urlRes.text();
       console.error("ElevenLabs signed URL error:", errorText);
       return NextResponse.json(
         { error: "Failed to get signed URL" },
-        { status: response.status }
+        { status: urlRes.status }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json({ signedUrl: data.signed_url });
+    const urlData = await urlRes.json();
+    let systemPrompt = "";
+
+    if (agentRes.ok) {
+      const agentData = await agentRes.json();
+      systemPrompt = agentData?.conversation_config?.agent?.prompt?.prompt ?? "";
+    }
+
+    return NextResponse.json({
+      signedUrl: urlData.signed_url,
+      systemPrompt,
+    });
   } catch (error) {
     console.error("Error fetching signed URL:", error);
     return NextResponse.json(
